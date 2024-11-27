@@ -153,15 +153,18 @@ impl Compose for Ui<'_> {
             commands.spawn(Node::default()).id()
         });
 
-        spawn(Node {
-            flex_direction: FlexDirection::Row,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::End,
-            flex_grow: 1.,
-            align_self: AlignSelf::Stretch,
-            justify_self: JustifySelf::Stretch,
-            ..default()
-        })
+        spawn((
+            Node {
+                flex_direction: FlexDirection::Row,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::End,
+                flex_grow: 1.,
+                align_self: AlignSelf::Stretch,
+                justify_self: JustifySelf::Stretch,
+                ..default()
+            },
+            PickingBehavior::IGNORE,
+        ))
         .target(entity)
         .content(IceShard {
             character: cx.me().character,
@@ -196,6 +199,8 @@ impl Compose for Game {
             energy,
         };
 
+        let target = use_mut(&cx, || 1);
+
         use_queue_provider(&cx);
 
         use_world_once(&cx, |mut commands: Commands| {
@@ -222,11 +227,8 @@ impl Compose for Game {
                 right_leg_rotation: *right_leg,
                 health: *health,
                 energy: *energy,
-            },
-            Character {
-                transform: Transform::from_xyz(0., 0., -40.)
-                    .with_rotation(Quat::from_rotation_y(PI)),
-                ..default()
+                is_selected: *target == 0,
+                on_click: Box::new(move || SignalMut::set(target, 0)),
             },
             Ui { character },
         )
@@ -241,6 +243,7 @@ fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins.set(ImagePlugin::default_nearest()),
+            MeshPickingPlugin,
             ActuatePlugin,
             voxy::DefaultPlugins,
         ))

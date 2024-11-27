@@ -1,10 +1,14 @@
 use actuate::prelude::*;
 use bevy::prelude::*;
-use std::cell::Cell;
+use std::{
+    cell::Cell,
+    mem,
+    sync::{Arc, Mutex},
+};
 use voxy::{scene::VoxelSceneHandle, VoxelSceneModels};
 
-#[derive(Data, Default)]
-pub struct Character {
+#[derive(Data)]
+pub struct Character<'a> {
     pub transform: Transform,
     pub left_arm_rotation: f32,
     pub right_arm_rotation: f32,
@@ -12,9 +16,11 @@ pub struct Character {
     pub right_leg_rotation: f32,
     pub health: u32,
     pub energy: u32,
+    pub is_selected: bool,
+    pub on_click: Box<dyn Fn() + Send + Sync + 'a>,
 }
 
-impl Compose for Character {
+impl Compose for Character<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let handle = use_world_once(&cx, |asset_server: Res<AssetServer>| {
             asset_server.load("character.vox")
@@ -27,6 +33,44 @@ impl Compose for Character {
                 Visibility::default(),
             )
         });
+
+        let on_click: Map<'_, Box<dyn Fn() + Send + Sync>> =
+            Signal::map(cx.me(), |me| &me.on_click);
+        let on_click: Map<'_, Box<dyn Fn() + Send + Sync>> = unsafe { mem::transmute(on_click) };
+
+        let is_loaded = use_ref(&cx, || Cell::new(false));
+
+        let is_mouse_down = Arc::new(Mutex::new(false));
+
+        use_world(
+            &cx,
+            move |mut commands: Commands, query: Query<&Children>| {
+                let is_mouse_down = is_mouse_down.clone();
+
+                if !is_loaded.get() {
+                    for child in query.get(entity).into_iter().flatten() {
+                        is_loaded.set(true);
+
+                        let is_mouse_down = is_mouse_down.clone();
+                        let is_mouse_down_out = is_mouse_down.clone();
+                        let is_mouse_down_up = is_mouse_down.clone();
+                        commands
+                            .entity(*child)
+                            .observe(move |_trigger: Trigger<Pointer<Down>>| {
+                                *is_mouse_down.lock().unwrap() = true;
+                            })
+                            .observe(move |_trigger: Trigger<Pointer<Out>>| {
+                                *is_mouse_down_out.lock().unwrap() = false;
+                            })
+                            .observe(move |_trigger: Trigger<Pointer<Up>>| {
+                                if mem::take(&mut *is_mouse_down_up.lock().unwrap()) {
+                                    on_click()
+                                }
+                            });
+                    }
+                }
+            },
+        );
 
         let pos = use_mut(&cx, || Vec2::ZERO);
 
@@ -100,6 +144,7 @@ impl Compose for Character {
             health: cx.me().health,
             energy: cx.me().energy,
             pos: *pos,
+            is_selected: cx.me().is_selected,
         }
     }
 }
@@ -109,6 +154,7 @@ struct StatusBar {
     health: u32,
     energy: u32,
     pos: Vec2,
+    is_selected: bool,
 }
 
 impl Compose for StatusBar {
@@ -134,9 +180,15 @@ impl Compose for StatusBar {
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 padding: UiRect::axes(Val::Px(0.5), Val::Px(0.25)),
+                border: UiRect::all(Val::Px(0.25)),
                 ..default()
             },
             BackgroundColor(Color::BLACK),
+            BorderColor(if cx.me().is_selected {
+                Color::WHITE
+            } else {
+                Color::BLACK
+            }),
         ))
         .target(health_entity)
         .content((
