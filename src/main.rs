@@ -1,14 +1,20 @@
 use actuate::prelude::*;
 use bevy::{core_pipeline::bloom::Bloom, prelude::*};
+use std::time::Duration;
 
 mod character;
 use self::character::Character;
+
+mod queue;
+use self::queue::{use_queue_provider, use_queued};
 
 #[derive(Data, Default)]
 struct Game;
 
 impl Compose for Game {
     fn compose(cx: Scope<Self>) -> impl Compose {
+        use_queue_provider(&cx);
+
         use_world_once(&cx, |mut commands: Commands| {
             commands.spawn((
                 Camera {
@@ -22,7 +28,19 @@ impl Compose for Game {
             ));
         });
 
-        Character::default()
+        let x = use_animated(&cx, || 0.);
+
+        let task = use_queued(&cx, move || async move {
+            loop {
+                x.animate(1., Duration::from_secs(1)).await;
+                x.animate(0., Duration::from_secs(1)).await;
+            }
+        });
+
+        Character {
+            left_arm_rotation: *x,
+            ..default()
+        }
     }
 }
 

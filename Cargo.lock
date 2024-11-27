@@ -62,13 +62,14 @@ dependencies = [
 [[package]]
 name = "actuate"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "089cb3ad480ad90fee3c6ed62848c4fe05a05bbca4aed22c24b28c00b0210d0c"
+source = "git+https://github.com/actuate-rs/actuate#ea45da31707df1634390818ce17f32a49bdd0f26"
 dependencies = [
  "actuate-macros",
  "bevy_app",
  "bevy_ecs",
  "bevy_hierarchy",
+ "bevy_math",
+ "bevy_time",
  "bevy_utils",
  "slotmap",
  "thiserror 2.0.3",
@@ -79,8 +80,7 @@ dependencies = [
 [[package]]
 name = "actuate-macros"
 version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f04e86d099a611807d37ac2963f4afc5c213090f8cb0319fa2785667b48e42"
+source = "git+https://github.com/actuate-rs/actuate#ea45da31707df1634390818ce17f32a49bdd0f26"
 dependencies = [
  "quote",
  "syn",
@@ -2316,6 +2316,7 @@ version = "0.1.0"
 dependencies = [
  "actuate",
  "bevy",
+ "tokio",
  "voxy",
 ]
 
