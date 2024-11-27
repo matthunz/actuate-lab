@@ -1,13 +1,13 @@
-use std::{future::Future, pin::Pin};
-
 use crate::use_queued;
 use actuate::prelude::*;
 use bevy::prelude::*;
+use std::{future::Future, pin::Pin};
 
 #[derive(Data)]
 pub struct Skill<'a> {
     pub name: Cow<'a, String>,
     pub description: Cow<'a, String>,
+    pub cooldown: u8,
     pub on_click: Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a>,
 }
 
@@ -25,12 +25,52 @@ impl Compose for Skill<'_> {
 
         let task = use_queued(&cx, move || (cx.me().on_click)());
 
+        let is_used = use_mut(&cx, || false);
+
+        let font = use_world_once(&cx, |asset_server: Res<AssetServer>| {
+            asset_server.load("C&C Red Alert [INET].ttf")
+        });
+
         spawn((Node {
             width: Val::Px(4.),
             height: Val::Px(4.),
             ..default()
         },))
         .content((
+            if *is_used {
+                Some(
+                    spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            top: Val::Px(0.),
+                            left: Val::Px(0.),
+                            width: Val::Percent(100.),
+                            height: Val::Percent(100.),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::BLACK),
+                        PickingBehavior::IGNORE,
+                        ZIndex(4),
+                    ))
+                    .content(spawn((
+                        Text::new(cx.me().cooldown.to_string()),
+                        TextFont {
+                            font: font.clone(),
+                            font_size: 2.,
+                            ..default()
+                        },
+                        TextLayout {
+                            justify: JustifyText::Center,
+                            ..default()
+                        },
+                        PickingBehavior::IGNORE,
+                    ))),
+                )
+            } else {
+                None
+            },
             spawn((
                 Node {
                     position_type: PositionType::Absolute,
@@ -73,7 +113,10 @@ impl Compose for Skill<'_> {
             .observe(move |_trigger: In<Trigger<Pointer<Up>>>| {
                 SignalMut::set(is_pointer_down, false)
             })
-            .observe(move |_trigger: In<Trigger<Pointer<Click>>>| task.queue()),
+            .observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
+                task.queue();
+                SignalMut::set(is_used, true)
+            }),
             if *is_hovered {
                 Some(Menu {
                     name: Signal::map(cx.me(), |me| &*me.name).into(),

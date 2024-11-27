@@ -1,5 +1,7 @@
 use actuate::prelude::*;
 use bevy::{core_pipeline::bloom::Bloom, prelude::*};
+use futures::future;
+use std::f32::consts::{FRAC_PI_2, PI};
 use std::time::Duration;
 
 mod character;
@@ -11,9 +13,19 @@ use self::queue::{use_queue_provider, use_queued};
 mod skill;
 use self::skill::Skill;
 
+#[derive(Clone, Copy, Data)]
+struct CharacterData<'a> {
+    translation: UseAnimated<'a, Vec3>,
+    rotation: UseAnimated<'a, Vec3>,
+    left_arm: UseAnimated<'a, f32>,
+    right_arm: UseAnimated<'a, f32>,
+    left_leg: UseAnimated<'a, f32>,
+    right_leg: UseAnimated<'a, f32>,
+}
+
 #[derive(Data)]
 struct IceShard<'a> {
-    x: UseAnimated<'a, f32>,
+    character: CharacterData<'a>,
 }
 
 impl Compose for IceShard<'_> {
@@ -23,10 +35,101 @@ impl Compose for IceShard<'_> {
             description: Cow::Owned(String::from(
                 "Launch a shard of ice at the target, dealing 50 damage.",
             )),
+            cooldown: 2,
             on_click: Box::new(move || {
                 Box::pin(async move {
-                    cx.me().x.animate(1., Duration::from_secs(1)).await;
-                    cx.me().x.animate(0., Duration::from_secs(1)).await;
+                    let duration = Duration::from_millis(500);
+                    let arm = 0.5;
+                    let leg = 0.25;
+
+                    future::join(
+                        cx.me()
+                            .character
+                            .translation
+                            .animate(Vec3::new(0., 0., -10.), Duration::from_millis(1500)),
+                        async {
+                            future::join4(
+                                cx.me().character.left_arm.animate(arm, duration),
+                                cx.me().character.right_arm.animate(-arm, duration),
+                                cx.me().character.left_leg.animate(leg, duration),
+                                cx.me().character.right_leg.animate(-leg, duration),
+                            )
+                            .await;
+
+                            future::join4(
+                                cx.me().character.left_arm.animate(-arm, duration),
+                                cx.me().character.right_arm.animate(arm, duration),
+                                cx.me().character.left_leg.animate(-leg, duration),
+                                cx.me().character.right_leg.animate(leg, duration),
+                            )
+                            .await;
+
+                            future::join4(
+                                cx.me().character.left_arm.animate(0., duration),
+                                cx.me().character.right_arm.animate(0., duration),
+                                cx.me().character.left_leg.animate(0., duration),
+                                cx.me().character.right_leg.animate(0., duration),
+                            )
+                            .await;
+
+                            cx.me()
+                                .character
+                                .right_arm
+                                .animate(FRAC_PI_2, Duration::from_millis(200))
+                                .await;
+                            cx.me()
+                                .character
+                                .right_arm
+                                .animate(0., Duration::from_millis(200))
+                                .await;
+
+                            cx.me()
+                                .character
+                                .rotation
+                                .animate(Vec3::new(0., PI, 0.), Duration::from_millis(250))
+                                .await;
+                        },
+                    )
+                    .await;
+
+                    future::join(
+                        cx.me()
+                            .character
+                            .translation
+                            .animate(Vec3::new(0., 0., 40.), Duration::from_millis(1500)),
+                        async {
+                            future::join4(
+                                cx.me().character.left_arm.animate(arm, duration),
+                                cx.me().character.right_arm.animate(-arm, duration),
+                                cx.me().character.left_leg.animate(leg, duration),
+                                cx.me().character.right_leg.animate(-leg, duration),
+                            )
+                            .await;
+
+                            future::join4(
+                                cx.me().character.left_arm.animate(-arm, duration),
+                                cx.me().character.right_arm.animate(arm, duration),
+                                cx.me().character.left_leg.animate(-leg, duration),
+                                cx.me().character.right_leg.animate(leg, duration),
+                            )
+                            .await;
+
+                            future::join4(
+                                cx.me().character.left_arm.animate(0., duration),
+                                cx.me().character.right_arm.animate(0., duration),
+                                cx.me().character.left_leg.animate(0., duration),
+                                cx.me().character.right_leg.animate(0., duration),
+                            )
+                            .await;
+
+                            cx.me()
+                                .character
+                                .rotation
+                                .animate(Vec3::new(0., 0., 0.), Duration::from_millis(250))
+                                .await;
+                        },
+                    )
+                    .await;
                 })
             }),
         }
@@ -35,7 +138,7 @@ impl Compose for IceShard<'_> {
 
 #[derive(Data)]
 pub struct Ui<'a> {
-    x: UseAnimated<'a, f32>,
+    character: CharacterData<'a>,
 }
 
 impl Compose for Ui<'_> {
@@ -54,7 +157,9 @@ impl Compose for Ui<'_> {
             ..default()
         })
         .target(entity)
-        .content(IceShard { x: cx.me().x })
+        .content(IceShard {
+            character: cx.me().character,
+        })
     }
 }
 
@@ -63,7 +168,22 @@ struct Game;
 
 impl Compose for Game {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let x = use_animated(&cx, || 0.);
+        let translation = use_animated(&cx, || Vec3::new(0., 0., 40.));
+        let rotation = use_animated(&cx, || Vec3::ZERO);
+
+        let left_arm = use_animated(&cx, || 0.);
+        let right_arm = use_animated(&cx, || 0.);
+        let left_leg = use_animated(&cx, || 0.);
+        let right_leg = use_animated(&cx, || 0.);
+
+        let character = CharacterData {
+            translation,
+            rotation,
+            left_arm,
+            right_arm,
+            left_leg,
+            right_leg,
+        };
 
         use_queue_provider(&cx);
 
@@ -82,10 +202,20 @@ impl Compose for Game {
 
         (
             Character {
-                left_arm_rotation: *x,
+                transform: Transform::from_translation(*translation).with_rotation(
+                    Quat::from_euler(EulerRot::YXZ, rotation.y, rotation.x, rotation.z),
+                ),
+                left_arm_rotation: *left_arm,
+                right_arm_rotation: *right_arm,
+                left_leg_rotation: *left_leg,
+                right_leg_rotation: *right_leg,
+            },
+            Character {
+                transform: Transform::from_xyz(0., 0., -40.)
+                    .with_rotation(Quat::from_rotation_y(PI)),
                 ..default()
             },
-            Ui { x },
+            Ui { character },
         )
     }
 }
