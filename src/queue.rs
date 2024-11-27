@@ -42,6 +42,7 @@ pub fn use_queued<'a, F: Future>(
     UseQueued { queue, tx }
 }
 
+#[derive(Clone, Copy)]
 pub struct UseQueued<'a> {
     queue: &'a Queue,
     tx: &'a mpsc::UnboundedSender<()>,
