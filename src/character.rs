@@ -1,4 +1,4 @@
-use actuate::prelude::*;
+use actuate::{animation::AnimationController, prelude::*};
 use bevy::prelude::*;
 use std::{
     cell::Cell,
@@ -7,8 +7,75 @@ use std::{
 };
 use voxy::{scene::VoxelSceneHandle, VoxelSceneModels};
 
+#[derive(Clone, Data)]
+pub struct CharacterState {
+    pub translation: AnimationController<Vec3>,
+    pub rotation: AnimationController<Vec3>,
+    pub left_arm: AnimationController<f32>,
+    pub right_arm: AnimationController<f32>,
+    pub left_leg: AnimationController<f32>,
+    pub right_leg: AnimationController<f32>,
+    pub health: u32,
+    pub energy: u32,
+}
+
 #[derive(Data)]
 pub struct Character<'a> {
+    pub index: usize,
+    pub target: usize,
+    pub transation: Vec3,
+    pub on_mount: Box<dyn Fn(CharacterState) + 'a>,
+    pub on_click: Box<dyn Fn() + Send + Sync + 'a>,
+    pub health: u32,
+    pub energy: u32,
+}
+
+impl Compose for Character<'_> {
+    fn compose(cx: Scope<Self>) -> impl Compose {
+        let translation = use_animated(&cx, || cx.me().transation);
+        let rotation = use_animated(&cx, || Vec3::ZERO);
+
+        let left_arm = use_animated(&cx, || 0.);
+        let right_arm = use_animated(&cx, || 0.);
+        let left_leg = use_animated(&cx, || 0.);
+        let right_leg = use_animated(&cx, || 0.);
+
+        use_ref(&cx, || {
+            (cx.me().on_mount)(CharacterState {
+                translation: translation.controller(),
+                rotation: rotation.controller(),
+                left_arm: left_arm.controller(),
+                right_arm: right_arm.controller(),
+                left_leg: left_leg.controller(),
+                right_leg: right_leg.controller(),
+                health: 100,
+                energy: 10,
+            })
+        });
+
+        let on_click = Signal::map(cx.me(), |me| &me.on_click);
+
+        CharacterModel {
+            transform: Transform::from_translation(*translation).with_rotation(Quat::from_euler(
+                EulerRot::YXZ,
+                rotation.y,
+                rotation.x,
+                rotation.z,
+            )),
+            left_arm_rotation: *left_arm,
+            right_arm_rotation: *right_arm,
+            left_leg_rotation: *left_leg,
+            right_leg_rotation: *right_leg,
+            health: cx.me().health,
+            energy: cx.me().energy,
+            is_selected: cx.me().target == cx.me().index,
+            on_click: Box::new(move || (on_click)()),
+        }
+    }
+}
+
+#[derive(Data)]
+pub struct CharacterModel<'a> {
     pub transform: Transform,
     pub left_arm_rotation: f32,
     pub right_arm_rotation: f32,
@@ -20,7 +87,7 @@ pub struct Character<'a> {
     pub on_click: Box<dyn Fn() + Send + Sync + 'a>,
 }
 
-impl Compose for Character<'_> {
+impl Compose for CharacterModel<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let handle = use_world_once(&cx, |asset_server: Res<AssetServer>| {
             asset_server.load("character.vox")

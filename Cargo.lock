@@ -62,7 +62,7 @@ dependencies = [
 [[package]]
 name = "actuate"
 version = "0.10.1"
-source = "git+https://github.com/actuate-rs/actuate#79da84c473fffea071188a95e530f92784b1ff65"
+source = "git+https://github.com/actuate-rs/actuate#96e6709d0465d786f95cac78af52af195dab9e29"
 dependencies = [
  "actuate-macros",
  "bevy_app",
@@ -80,7 +80,7 @@ dependencies = [
 [[package]]
 name = "actuate-macros"
 version = "0.1.6"
-source = "git+https://github.com/actuate-rs/actuate#79da84c473fffea071188a95e530f92784b1ff65"
+source = "git+https://github.com/actuate-rs/actuate#96e6709d0465d786f95cac78af52af195dab9e29"
 dependencies = [
  "quote",
  "syn",
