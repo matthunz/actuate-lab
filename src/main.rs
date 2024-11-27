@@ -21,6 +21,8 @@ struct CharacterData<'a> {
     right_arm: UseAnimated<'a, f32>,
     left_leg: UseAnimated<'a, f32>,
     right_leg: UseAnimated<'a, f32>,
+    health: SignalMut<'a, u32>,
+    energy: SignalMut<'a, u32>,
 }
 
 #[derive(Data)]
@@ -77,6 +79,10 @@ impl Compose for IceShard<'_> {
                                 .right_arm
                                 .animate(FRAC_PI_2, Duration::from_millis(200))
                                 .await;
+
+                            SignalMut::update(cx.me().character.health, |health| *health -= 1);
+                            SignalMut::update(cx.me().character.energy, |energy| *energy -= 1);
+
                             cx.me()
                                 .character
                                 .right_arm
@@ -176,6 +182,9 @@ impl Compose for Game {
         let left_leg = use_animated(&cx, || 0.);
         let right_leg = use_animated(&cx, || 0.);
 
+        let health = use_mut(&cx, || 100);
+        let energy = use_mut(&cx, || 10);
+
         let character = CharacterData {
             translation,
             rotation,
@@ -183,6 +192,8 @@ impl Compose for Game {
             right_arm,
             left_leg,
             right_leg,
+            health,
+            energy,
         };
 
         use_queue_provider(&cx);
@@ -209,6 +220,8 @@ impl Compose for Game {
                 right_arm_rotation: *right_arm,
                 left_leg_rotation: *left_leg,
                 right_leg_rotation: *right_leg,
+                health: *health,
+                energy: *energy,
             },
             Character {
                 transform: Transform::from_xyz(0., 0., -40.)
