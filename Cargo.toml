@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+actuate = { version = "0.10.1", features = ["ecs"] }
+bevy = "0.15.0-rc.3"
+voxy = { git = "https://github.com/matthunz/voxy" }
