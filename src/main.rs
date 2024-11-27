@@ -143,9 +143,7 @@ pub struct Ui<'a> {
 
 impl Compose for Ui<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
-        let entity = *use_world_once(&cx, |mut commands: Commands| {
-            commands.spawn(Node::default()).id()
-        });
+        let entity = use_context::<Entity>(&cx).unwrap();
 
         spawn((
             Node {
@@ -159,7 +157,7 @@ impl Compose for Ui<'_> {
             },
             PickingBehavior::IGNORE,
         ))
-        .target(entity)
+        .target(*entity)
         .content(IceShard {
             character_states: cx.me().character_states,
             player_idx: cx.me().player_idx,
@@ -174,6 +172,11 @@ struct Game;
 impl Compose for Game {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let target = use_mut(&cx, || 0);
+
+        let entity = *use_world_once(&cx, |mut commands: Commands| {
+            commands.spawn(Node::default()).id()
+        });
+        use_provider(&cx, || entity);
 
         use_queue_provider(&cx);
 

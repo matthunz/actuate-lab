@@ -238,6 +238,11 @@ impl Compose for StatusBar {
 
         let health_entity = use_bundle(&cx, || ());
 
+        let entity = *use_context::<Entity>(&cx).unwrap();
+        use_world_once(&cx, |mut commands: Commands| {
+            commands.entity(entity).add_child(health_entity);
+        });
+
         spawn((
             Node {
                 position_type: PositionType::Absolute,
