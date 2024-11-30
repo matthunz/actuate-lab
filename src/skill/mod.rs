@@ -3,6 +3,9 @@ use actuate::prelude::*;
 use bevy::prelude::*;
 use std::{future::Future, pin::Pin};
 
+mod ice_shard;
+pub use self::ice_shard::IceShard;
+
 #[derive(Data)]
 pub struct Skill<'a> {
     pub name: Cow<'a, String>,
