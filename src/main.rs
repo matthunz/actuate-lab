@@ -18,6 +18,8 @@ struct IceShard<'a> {
     character_states: SignalMut<'a, Vec<CharacterState>>,
     player_idx: usize,
     target_idx: usize,
+    turn: u32,
+    is_turn_done: bool,
 }
 
 impl Compose for IceShard<'_> {
@@ -28,6 +30,8 @@ impl Compose for IceShard<'_> {
                 "Launch a shard of ice at the target, dealing 50 damage.",
             )),
             cooldown: 2,
+            turn: cx.me().turn,
+            is_enabled: !cx.me().is_turn_done,
             on_click: Box::new(move || {
                 Box::pin(async move {
                     let duration = Duration::from_millis(500);
@@ -145,6 +149,18 @@ impl Compose for Ui<'_> {
     fn compose(cx: Scope<Self>) -> impl Compose {
         let entity = use_context::<Entity>(&cx).unwrap();
 
+        let turn = use_mut(&cx, || 0);
+
+        let font = use_world_once(&cx, |asset_server: Res<AssetServer>| {
+            asset_server.load("C&C Red Alert [INET].ttf")
+        });
+
+        let is_turn_done = use_mut(&cx, || false);
+        let on_click = use_queued(&cx, move || async move {
+            SignalMut::update(turn, |turn| *turn += 1);
+            SignalMut::set(is_turn_done, false);
+        });
+
         spawn((
             Node {
                 flex_direction: FlexDirection::Row,
@@ -158,11 +174,65 @@ impl Compose for Ui<'_> {
             PickingBehavior::IGNORE,
         ))
         .target(*entity)
-        .content(IceShard {
-            character_states: cx.me().character_states,
-            player_idx: cx.me().player_idx,
-            target_idx: cx.me().target_idx,
-        })
+        .content(
+            spawn((
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                PickingBehavior::IGNORE,
+            ))
+            .content((
+                spawn((
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    PickingBehavior::IGNORE,
+                ))
+                .content((
+                    IceShard {
+                        character_states: cx.me().character_states,
+                        player_idx: cx.me().player_idx,
+                        target_idx: cx.me().target_idx,
+                        turn: *turn,
+                        is_turn_done: *is_turn_done,
+                    },
+                    IceShard {
+                        character_states: cx.me().character_states,
+                        player_idx: cx.me().player_idx,
+                        target_idx: cx.me().target_idx,
+                        turn: *turn,
+                        is_turn_done: *is_turn_done,
+                    },
+                )),
+                spawn((
+                    Text::new("End Turn"),
+                    TextColor(if *is_turn_done {
+                        Color::srgb_u8(117, 117, 117)
+                    } else {
+                        Color::WHITE
+                    }),
+                    TextFont {
+                        font: font.clone(),
+                        font_size: 2.,
+                        ..default()
+                    },
+                    TextLayout {
+                        justify: JustifyText::Center,
+                        ..default()
+                    },
+                ))
+                .observe(move |_: In<Trigger<Pointer<Click>>>| {
+                    SignalMut::set(is_turn_done, true);
+                    on_click.queue();
+                }),
+            )),
+        )
     }
 }
 

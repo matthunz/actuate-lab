@@ -8,6 +8,8 @@ pub struct Skill<'a> {
     pub name: Cow<'a, String>,
     pub description: Cow<'a, String>,
     pub cooldown: u8,
+    pub turn: u32,
+    pub is_enabled: bool,
     pub on_click: Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a>,
 }
 
@@ -25,11 +27,14 @@ impl Compose for Skill<'_> {
 
         let task = use_queued(&cx, move || (cx.me().on_click)());
 
-        let is_used = use_mut(&cx, || false);
+        let last_used = use_mut(&cx, || None);
 
         let font = use_world_once(&cx, |asset_server: Res<AssetServer>| {
             asset_server.load("C&C Red Alert [INET].ttf")
         });
+
+        let turn = Signal::map(cx.me(), |me| &me.turn);
+        let is_enabled = Signal::map(cx.me(), |me| &me.is_enabled);
 
         spawn((Node {
             width: Val::Px(4.),
@@ -37,37 +42,43 @@ impl Compose for Skill<'_> {
             ..default()
         },))
         .content((
-            if *is_used {
-                Some(
-                    spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            top: Val::Px(0.),
-                            left: Val::Px(0.),
-                            width: Val::Percent(100.),
-                            height: Val::Percent(100.),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        BackgroundColor(Color::BLACK),
-                        PickingBehavior::IGNORE,
-                        ZIndex(4),
-                    ))
-                    .content(spawn((
-                        Text::new(cx.me().cooldown.to_string()),
-                        TextFont {
-                            font: font.clone(),
-                            font_size: 2.,
-                            ..default()
-                        },
-                        TextLayout {
-                            justify: JustifyText::Center,
-                            ..default()
-                        },
-                        PickingBehavior::IGNORE,
-                    ))),
-                )
+            if let Some(last_used) = *last_used {
+                let end = last_used + cx.me().cooldown as u32;
+
+                if cx.me().turn < end {
+                    Some(
+                        spawn((
+                            Node {
+                                position_type: PositionType::Absolute,
+                                top: Val::Px(0.),
+                                left: Val::Px(0.),
+                                width: Val::Percent(100.),
+                                height: Val::Percent(100.),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgba(0., 0., 0., 0.4)),
+                            PickingBehavior::IGNORE,
+                            ZIndex(4),
+                        ))
+                        .content(spawn((
+                            Text::new((end - *turn).to_string()),
+                            TextFont {
+                                font: font.clone(),
+                                font_size: 2.,
+                                ..default()
+                            },
+                            TextLayout {
+                                justify: JustifyText::Center,
+                                ..default()
+                            },
+                            PickingBehavior::IGNORE,
+                        ))),
+                    )
+                } else {
+                    None
+                }
             } else {
                 None
             },
@@ -101,21 +112,27 @@ impl Compose for Skill<'_> {
                 ZIndex(2),
             ))
             .observe(move |_trigger: In<Trigger<Pointer<Over>>>| {
-                SignalMut::set_if_neq(is_hovered, true)
+                if *is_enabled {
+                    SignalMut::set_if_neq(is_hovered, true)
+                }
             })
             .observe(move |_trigger: In<Trigger<Pointer<Out>>>| {
                 SignalMut::set(is_hovered, false);
                 SignalMut::set(is_pointer_down, false);
             })
             .observe(move |_trigger: In<Trigger<Pointer<Down>>>| {
-                SignalMut::set(is_pointer_down, true)
+                if *is_enabled {
+                    SignalMut::set(is_pointer_down, true)
+                }
             })
             .observe(move |_trigger: In<Trigger<Pointer<Up>>>| {
                 SignalMut::set(is_pointer_down, false)
             })
             .observe(move |_trigger: In<Trigger<Pointer<Click>>>| {
-                task.queue();
-                SignalMut::set(is_used, true)
+                if *is_enabled {
+                    task.queue();
+                    SignalMut::set(last_used, Some(*turn));
+                }
             }),
             if *is_hovered {
                 Some(Menu {
